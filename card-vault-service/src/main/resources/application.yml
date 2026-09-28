@@ -21,6 +21,12 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: none          # el esquema lo controla Flyway, no Hibernate
+    properties:
+      hibernate:
+        # Las columnas son TIMESTAMP (sin zona). Sin esto, Hibernate pide a Oracle
+        # la fecha "con zona horaria" al leer un Instant y falla con ORA-18716.
+        type.preferred_instant_jdbc_type: TIMESTAMP
+        jdbc.time_zone: UTC   # todas las fechas se guardan en UTC
   flyway:
     locations: classpath:db/migration
 
