@@ -1,0 +1,9 @@
+# Un Namespace aísla los recursos del proyecto dentro del clúster.
+# Las etiquetas pod-security aplican el perfil "restricted": Kubernetes rechaza
+# pods que corran como root, con privilegios, etc.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mini-suiche
+  labels:
+    pod-security.kubernetes.io/enforce: restricted

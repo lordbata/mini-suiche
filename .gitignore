@@ -1,0 +1,8 @@
+target/
+.idea/
+*.iml
+.vscode/
+# Nunca subir secretos reales
+k8s/secrets.yaml
+.env
+azure/.out/

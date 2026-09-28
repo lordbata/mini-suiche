@@ -1,0 +1,56 @@
+# ============================================================
+# card-vault-service - configuración
+# Perfil por defecto: H2 en memoria en "modo Oracle" (corre sin Docker).
+# Perfil "oracle": base de datos Oracle real (docker compose / Kubernetes).
+# ============================================================
+server:
+  port: 8081
+  shutdown: graceful          # termina las peticiones en curso antes de apagarse (clave en Kubernetes)
+  error:
+    include-message: never    # no filtrar detalles internos en errores
+    include-stacktrace: never
+
+spring:
+  application:
+    name: card-vault-service
+  datasource:
+    url: jdbc:h2:mem:vault;MODE=Oracle;DB_CLOSE_DELAY=-1
+    username: sa
+    password: ""
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none          # el esquema lo controla Flyway, no Hibernate
+  flyway:
+    locations: classpath:db/migration
+
+vault:
+  crypto:
+    # SOLO PARA DESARROLLO LOCAL. En Kubernetes/Azure se sobreescriben con
+    # variables de entorno (VAULT_CRYPTO_ENCRYPTIONKEY, VAULT_CRYPTO_HMACKEY)
+    # que vienen de un Secret / Azure Key Vault.
+    encryption-key: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+    hmac-key: ZGV2LWhtYWMta2V5LW5vLXVzYXItZW4tcHJvZHVjY2lvbg==
+    key-version: 1
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true         # /actuator/health/liveness y /readiness para Kubernetes
+
+---
+spring:
+  config:
+    activate:
+      on-profile: oracle
+  datasource:
+    url: ${DB_URL:jdbc:oracle:thin:@//localhost:1521/FREEPDB1}
+    username: ${DB_USER:VAULT}
+    password: ${DB_PASSWORD:vault_pwd}
+    hikari:
+      maximum-pool-size: 10

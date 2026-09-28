@@ -1,0 +1,72 @@
+# ------------------------------------------------------------------
+# Entorno local completo:
+#   docker compose up --build                     -> Oracle + 2 microservicios
+#   docker compose --profile gateway up --build   -> + WSO2 API Manager
+# Las contraseñas de aquí son SOLO para desarrollo local.
+# ------------------------------------------------------------------
+services:
+
+  oracle:
+    image: gvenzl/oracle-free:23-slim-faststart   # Oracle Database 23ai Free
+    environment:
+      ORACLE_PASSWORD: oracle_admin_pwd
+    ports:
+      - "1521:1521"
+    volumes:
+      - ./docker/oracle:/container-entrypoint-initdb.d:ro
+      - oracle-data:/opt/oracle/oradata
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  card-vault-service:
+    build:
+      context: .
+      args:
+        SERVICE: card-vault-service
+    environment:
+      SPRING_PROFILES_ACTIVE: oracle
+      DB_URL: jdbc:oracle:thin:@//oracle:1521/FREEPDB1
+      DB_USER: VAULT
+      DB_PASSWORD: vault_pwd
+    ports:
+      - "8081:8081"
+    depends_on:
+      oracle:
+        condition: service_healthy
+
+  payment-service:
+    build:
+      context: .
+      args:
+        SERVICE: payment-service
+    environment:
+      SPRING_PROFILES_ACTIVE: oracle
+      DB_URL: jdbc:oracle:thin:@//oracle:1521/FREEPDB1
+      DB_USER: PAYMENTS
+      DB_PASSWORD: payments_pwd
+      CARD_VAULT_URL: http://card-vault-service:8081
+    ports:
+      - "8082:8082"
+    depends_on:
+      oracle:
+        condition: service_healthy
+      card-vault-service:
+        condition: service_started
+
+  # API Manager: https://localhost:9443/publisher  (admin / admin)
+  # Gateway:     https://localhost:8243
+  # Necesita ~3 GB de RAM libres. Arranca en 2-3 minutos.
+  wso2am:
+    image: wso2/wso2am:4.3.0
+    profiles: ["gateway"]
+    ports:
+      - "9443:9443"   # Publisher, Developer Portal, Admin, Key Manager (OAuth2)
+      - "8243:8243"   # Gateway HTTPS (por donde entran los clientes)
+      - "8280:8280"   # Gateway HTTP
+
+volumes:
+  oracle-data:

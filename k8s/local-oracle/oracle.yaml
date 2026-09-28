@@ -1,0 +1,87 @@
+# SOLO PARA CLÚSTER LOCAL (Docker Desktop / minikube / kind).
+# En producción la base de datos NO corre dentro de Kubernetes: se usa un
+# servicio gestionado (Oracle Database@Azure, Exadata, o el Oracle on-premise del banco).
+#
+# StatefulSet (y no Deployment) porque una base de datos necesita identidad
+# y disco estables: si el pod se reinicia, vuelve a montar el MISMO volumen.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oracle-init
+  namespace: mini-suiche
+data:
+  01-create-users.sql: |
+    ALTER SESSION SET CONTAINER = FREEPDB1;
+    CREATE USER VAULT IDENTIFIED BY vault_pwd QUOTA UNLIMITED ON USERS;
+    GRANT CREATE SESSION, CREATE TABLE, CREATE SEQUENCE TO VAULT;
+    CREATE USER PAYMENTS IDENTIFIED BY payments_pwd QUOTA UNLIMITED ON USERS;
+    GRANT CREATE SESSION, CREATE TABLE, CREATE SEQUENCE TO PAYMENTS;
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: oracle
+  namespace: mini-suiche
+spec:
+  serviceName: oracle
+  replicas: 1
+  selector:
+    matchLabels:
+      app: oracle
+  template:
+    metadata:
+      labels:
+        app: oracle
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 54321
+        fsGroup: 54321
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: oracle
+          image: gvenzl/oracle-free:23-slim-faststart
+          env:
+            - name: ORACLE_PASSWORD
+              value: oracle_admin_pwd
+          ports:
+            - containerPort: 1521
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          readinessProbe:
+            exec:
+              command: ["healthcheck.sh"]
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 500m, memory: 2Gi }
+          volumeMounts:
+            - name: data
+              mountPath: /opt/oracle/oradata
+            - name: init
+              mountPath: /container-entrypoint-initdb.d
+      volumes:
+        - name: init
+          configMap:
+            name: oracle-init
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: oracle
+  namespace: mini-suiche
+spec:
+  selector:
+    app: oracle
+  ports:
+    - port: 1521

@@ -1,0 +1,12 @@
+# Configuración NO secreta. Cambiarla no requiere reconstruir la imagen.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mini-suiche-config
+  namespace: mini-suiche
+data:
+  SPRING_PROFILES_ACTIVE: oracle
+  # Local: la Oracle de k8s/local-oracle. En Azure: la cadena de Oracle Database@Azure / on-premise.
+  DB_URL: jdbc:oracle:thin:@//oracle:1521/FREEPDB1
+  # DNS interno de Kubernetes: <service>.<namespace>.svc.cluster.local (o solo <service>)
+  CARD_VAULT_URL: http://card-vault-service:8081

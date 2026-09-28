@@ -1,0 +1,49 @@
+# "Overlay" de Kustomize para Azure: reutiliza k8s/ y le agrega lo específico de AKS
+# (imágenes del ACR + secretos desde Key Vault). Lo aplica azure/deploy-aks.sh.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../k8s
+  - secret-provider-class.yaml
+images:
+  - name: card-vault-service
+    newName: __ACR_NAME__.azurecr.io/card-vault-service
+    newTag: "1.0.0"
+  - name: payment-service
+    newName: __ACR_NAME__.azurecr.io/payment-service
+    newTag: "1.0.0"
+# El usuario de BD no es secreto; la contraseña sí (viene de Key Vault)
+configMapGenerator:
+  - name: db-users
+    namespace: mini-suiche
+    literals:
+      - VAULT_DB_USER=VAULT
+      - PAYMENTS_DB_USER=PAYMENTS
+patches:
+  # Montar el volumen CSI es lo que dispara la sincronización Key Vault -> Secret
+  - target: { kind: Deployment, name: card-vault-service }
+    patch: |-
+      - op: add
+        path: /spec/template/spec/volumes/-
+        value: { name: kv, csi: { driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: { secretProviderClass: card-vault-kv } } }
+      - op: add
+        path: /spec/template/spec/containers/0/volumeMounts/-
+        value: { name: kv, mountPath: /mnt/secrets, readOnly: true }
+      - op: add
+        path: /spec/template/spec/containers/0/env
+        value:
+          - name: DB_USER
+            valueFrom: { configMapKeyRef: { name: db-users, key: VAULT_DB_USER } }
+  - target: { kind: Deployment, name: payment-service }
+    patch: |-
+      - op: add
+        path: /spec/template/spec/volumes/-
+        value: { name: kv, csi: { driver: secrets-store.csi.k8s.io, readOnly: true, volumeAttributes: { secretProviderClass: payment-kv } } }
+      - op: add
+        path: /spec/template/spec/containers/0/volumeMounts/-
+        value: { name: kv, mountPath: /mnt/secrets, readOnly: true }
+      - op: add
+        path: /spec/template/spec/containers/0/env
+        value:
+          - name: DB_USER
+            valueFrom: { configMapKeyRef: { name: db-users, key: PAYMENTS_DB_USER } }

@@ -1,0 +1,29 @@
+# Solo se publica el endpoint de TOKENIZACIÓN. El endpoint /internal/... de la
+# bóveda NO se incluye: así WSO2 nunca lo expone a Internet.
+openapi: 3.0.3
+info:
+  title: Cards API
+  version: v1
+  description: Tokenización de tarjetas (entrada del PAN al sistema).
+servers:
+  - url: http://card-vault-service:8081/api/v1
+paths:
+  /cards/tokens:
+    post:
+      summary: Tokenizar una tarjeta
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pan, expMonth, expYear, cvv]
+              properties:
+                pan:      { type: string, example: "4111111111111111" }
+                expMonth: { type: integer, example: 12 }
+                expYear:  { type: integer, example: 2030 }
+                cvv:      { type: string, example: "123" }
+      responses:
+        "201": { description: Token creado }
+        "400": { description: Datos inválidos }
+        "422": { description: Tarjeta inválida o vencida }

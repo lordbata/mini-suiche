@@ -1,0 +1,77 @@
+# SEGMENTACIÓN DE RED (PCI-DSS req. 1): el entorno de datos de tarjeta (CDE)
+# debe estar aislado. Por defecto Kubernetes permite que cualquier pod hable con
+# cualquier otro; estas políticas lo cambian a "todo cerrado salvo lo permitido".
+# Requiere un plugin de red que las aplique (en AKS: --network-policy azure/calico/cilium).
+
+# 1) Denegar TODO el tráfico entrante en el namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: mini-suiche
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress"]
+---
+# 2) A la bóveda solo pueden llegar: payment-service y el gateway WSO2
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: card-vault-allow
+  namespace: mini-suiche
+spec:
+  podSelector:
+    matchLabels:
+      app: card-vault-service
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: payment-service
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: wso2
+      ports:
+        - port: 8081
+---
+# 3) A payment-service solo puede llegar el gateway WSO2
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: payment-allow
+  namespace: mini-suiche
+spec:
+  podSelector:
+    matchLabels:
+      app: payment-service
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: wso2
+      ports:
+        - port: 8082
+---
+# 4) A Oracle (si corre en el clúster) solo llegan los dos microservicios
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: oracle-allow
+  namespace: mini-suiche
+spec:
+  podSelector:
+    matchLabels:
+      app: oracle
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: card-vault-service
+        - podSelector:
+            matchLabels:
+              app: payment-service
+      ports:
+        - port: 1521

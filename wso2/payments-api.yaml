@@ -1,0 +1,47 @@
+# Definición OpenAPI que se importa en WSO2 API Manager (Publisher -> Create API -> Import OpenAPI).
+# WSO2 expone este contrato en su Gateway y reenvía al backend (payment-service).
+openapi: 3.0.3
+info:
+  title: Payments API
+  version: v1
+  description: API de pagos de mini-suiche. Solo acepta tokens de tarjeta, nunca el PAN.
+servers:
+  - url: http://payment-service:8082/api/v1   # backend (nombre del contenedor / Service de K8s)
+paths:
+  /payments:
+    post:
+      summary: Crear un pago
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 8, maxLength: 64 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cardToken, amount, currency, merchantId]
+              properties:
+                cardToken: { type: string, example: tok_0123456789abcdef0123456789abcdef }
+                amount:    { type: number, example: 250.50 }
+                currency:  { type: string, example: USD }
+                merchantId: { type: string, example: FARMACIA-01 }
+      responses:
+        "201": { description: Pago creado (APPROVED o DECLINED) }
+        "200": { description: Reintento idempotente, se devuelve el pago original }
+        "400": { description: Petición inválida }
+        "422": { description: Token de tarjeta desconocido }
+        "503": { description: Bóveda no disponible }
+  /payments/{id}:
+    get:
+      summary: Consultar un pago
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+        "404": { description: No existe }
